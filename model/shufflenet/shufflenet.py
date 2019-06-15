@@ -34,12 +34,15 @@ def infererence(args):
     print('Preprocessing')
     transformer = get_transformer()
     x = preprocess(image, transformer)
-    print(x.shape)
+
+    #conv layer
+    conv1_w = np.load('./data/' + 'module.conv1.weight.npy')
+    conv1_b = np.load('./data/' + 'module.conv1.bias.npy')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('image', type=str, help='Path to image that we want to classify')
     parser.add_argument('idx_to_class', type=str, help='Path to JSON file mapping indexes to class names')
     args = parser.parse_args()
-    print('+_+ ',args)
     infererence(args)
