@@ -224,7 +224,6 @@ class DWConvolution:
         self.b = b
         self.stride = stride
         self.pad = pad
-        #print("DWConvolution W shape ", W.shape)
 
         # 중간 데이터（backward 시 사용）
         self.x = None   
@@ -243,18 +242,57 @@ class DWConvolution:
 
         col = im2coldw(x, FH, FW, self.stride, self.pad)
         col_W = self.W.reshape(FN * C, -1).T
-        #print('col shape ', col.shape)
-        #print('col_W shape ', col_W.shape)
 
         sub_out = np.zeros((N, col.shape[0], col.shape[1]))
-        #print(sub_out.shape)
         for c in range(0,C):
             sub_col = col[c]
             sub_col_W = col_W[:,c]
-            sub_out[0][c] = np.dot(sub_col, sub_col_W) + self.b
+            sub_out[0][c] = np.dot(sub_col, sub_col_W) + self.b[c]
 
         out = sub_out.reshape(N, col.shape[0], out_h, out_w)
-        #print(out.shape)
+
+        self.x = x
+        self.col = col
+        self.col_W = col_W
+        return out
+
+#ToDo : It can be merged into Convolution class
+class GroupConvolution:
+    def __init__(self, W, b, stride=1, pad=0, groups=1):
+        self.W = W
+        self.b = b
+        self.stride = stride
+        self.pad = pad
+        self.groups = groups
+        
+        # 중간 데이터（backward 시 사용）
+        self.x = None   
+        self.col = None
+        self.col_W = None
+        
+        # 가중치와 편향 매개변수의 기울기
+        self.dW = None
+        self.db = None
+
+    def forward(self, x):
+        FN, C, FH, FW = self.W.shape
+        N, C, H, W = x.shape
+        out_h = 1 + int((H + 2*self.pad - FH) / self.stride)
+        out_w = 1 + int((W + 2*self.pad - FW) / self.stride)
+        in_cn_per_g= C // self.groups
+        out_cn_per_g= FN // self.groups
+
+        col = im2col(x, FH, FW, self.stride, self.pad)
+        col_W = self.W.reshape(FN, -1).T
+        out = np.zeros((N, out_h*out_w, FN))
+
+        for g in range(0,self.groups):
+            sub_col = col[:,(g * in_cn_per_g):((g+1) * in_cn_per_g)]
+            sub_col_W = col_W[:,(g * out_cn_per_g):((g+1) * out_cn_per_g)]
+            sub_b = self.b[(g * out_cn_per_g):((g+1) * out_cn_per_g)]
+            sub_out = np.dot(sub_col, sub_col_W) + sub_b
+            out[:,:,(g * out_cn_per_g):((g+1) * out_cn_per_g)] = sub_out
+        out = out.reshape(N, out_h, out_w, -1).transpose(0, 3, 1, 2)
 
         self.x = x
         self.col = col
@@ -320,8 +358,8 @@ class AVGPooling:
 
     def forward(self, x):
         N, C, H, W = x.shape
-        out_h = int(1 + (H - self.pool_h) / self.stride)
-        out_w = int(1 + (W - self.pool_w) / self.stride)
+        out_h = int(1 + (H - self.pool_h + 2 * self.pad) / self.stride)
+        out_w = int(1 + (W - self.pool_w + 2 * self.pad) / self.stride)
 
         col = im2col(x, self.pool_h, self.pool_w, self.stride, self.pad)
         col = col.reshape(-1, self.pool_h*self.pool_w)
