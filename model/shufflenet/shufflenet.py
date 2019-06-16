@@ -4,6 +4,8 @@ sys.path.append(os.pardir)  # 부모 디렉터리의 파일을 가져올 수 있
 sys.path.append('../../')
 import numpy as np
 from dataset.mnist import load_mnist
+from common.layers import Convolution
+from common.layers import Pooling
 from common.trainer import Trainer
 import argparse
 
@@ -27,17 +29,29 @@ def preprocess(image, transformer):
   x = transformer(image).numpy()
   return x.reshape(-1, x.shape[0], x.shape[1], x.shape[2])
 
+def savetxt(name, data):
+    np.savetxt(name, data.reshape(-1), newline='\n', fmt='%4.3f')
+
 
 def infererence(args):
     print('Loading image')
     image = Image.open(args.image)
     print('Preprocessing')
     transformer = get_transformer()
-    x = preprocess(image, transformer)
+    input_data = preprocess(image, transformer)
 
     #conv layer
     conv1_w = np.load('./data/' + 'module.conv1.weight.npy')
     conv1_b = np.load('./data/' + 'module.conv1.bias.npy')
+    conv1_layer = Convolution(conv1_w, conv1_b, stride=2, pad=1)
+    conv1_out = conv1_layer.forward(input_data)
+    #savetxt('./dump/' + 'conv1_out.txt', conv1_out)
+
+    #max pooling
+    maxpooling = Pooling(3,3,2,1)
+    maxpool_out = maxpooling.forward(conv1_out)
+    #savetxt('./dump/' + 'maxpool_out.txt', maxpool_out)
+
 
 
 if __name__ == '__main__':
